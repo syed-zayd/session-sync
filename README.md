@@ -5,39 +5,11 @@
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
-**Move a coding-agent session from one CLI to another and keep going where you
-left off.**
+Move coding-agent sessions between CLIs so you can pick up where you left off in another tool without rebuilding context.
 
-Hit a rate limit in Claude Code halfway through a task? Push the session into
-Codex and carry on, with the whole conversation and every tool call it made. Or
-turn on automatic mirroring and every session you finish shows up, ready to
-resume, in all your other agents.
+Supported agents: **Claude Code**, **Codex CLI**, **Kiro CLI**, and **Antigravity CLI** (in all 12 directions).
 
-|  | Claude Code | Codex CLI | Kiro CLI | Antigravity CLI |
-|---|:---:|:---:|:---:|:---:|
-| Read sessions | ✓ | ✓ | ✓ | ✓ |
-| Write resumable sessions | ✓ | ✓ | ✓ | ✓ |
-| Tool calls carried natively | ✓ | ✓ | as a note | as a note |
-| Automatic push (Stop hook) | ✓ | ✓ | ✓ | ✓ |
-
-All 12 directions work. It's pure Python with no dependencies.
-
-* **No duplicates.** Pushing the same conversation again updates its mirror in
-  place, even after you've gone back and forth between tools.
-* **Your work is safe.** sessync refuses to overwrite a session that holds
-  turns the source doesn't, so nothing you typed in another tool is lost
-  without `--force`.
-* **Shows up where you'd look.** Mirrors appear in each agent's own resume
-  picker, labelled with where the conversation started.
-
-> [!NOTE]
-> sessync is an independent project, not affiliated with Anthropic, OpenAI,
-> Amazon or Google. None of these agents document their session formats, so
-> sessync works from what they write to disk, and an agent update can break an
-> adapter. If a push stops working after you update an agent, please
-> [open an issue](https://github.com/syed-zayd/session-sync/issues).
-
-## Install
+## Installation
 
 Requires Python 3.10+.
 
@@ -45,214 +17,87 @@ Requires Python 3.10+.
 pip install git+https://github.com/syed-zayd/session-sync
 ```
 
-This puts a `sessync` command on your PATH. To hack on it instead, see
-[Development](#development).
+*(or `pip install -e .` from a local clone)*
 
-## Quick start
+---
 
-Copy a Claude Code session into Codex:
+## Quick Setup
 
-```sh
-sessync push claude ad4ccd05-d797-495f-b5b9-ca6b81c51c0d codex
-```
+You can use Session Sync manually or set up automatic background sync.
 
-It prints what happened and the command to resume the new session:
+### Option 1: Manual Sync (End-to-End Example)
 
-```
-claude/ad4ccd05-d797-495f-b5b9-ca6b81c51c0d  (96 messages)
-  + codex        created   019823f1-7c4e-7c3a-9f10-2b6d5e4a8c11
-                 cd "C:\Users\you\project" && codex resume 019823f1-...
-```
+1. **Finish or exit your session.**  
+   When working in Claude Code, run `/exit` or check your prompt history. Claude displays or stores the session ID:
+   ```
+   # Example session ID: ad4ccd05-d797-495f-b5b9-ca6b81c51c0d
+   ```
+   *(You can also see recent IDs in `~/.claude/projects/<project>/`)*
 
-Copy it into every agent at once:
+2. **Push the session to Codex:**
+   ```sh
+   sessync push claude ad4ccd05-d797-495f-b5b9-ca6b81c51c0d codex
+   ```
+   This outputs the exact resume command:
+   ```
+   claude/ad4ccd05-d797-495f-b5b9-ca6b81c51c0d (24 messages)
+     + codex        created   019823f1-7c4e-7c3a-9f10-2b6d5e4a8c11
+                    cd "/path/to/project" && codex resume 019823f1-7c4e-7c3a-9f10-2b6d5e4a8c11
+   ```
 
-```sh
-sessync push claude ad4ccd05-d797-495f-b5b9-ca6b81c51c0d all
-```
+3. **Resume in Codex:**
+   ```sh
+   codex resume 019823f1-7c4e-7c3a-9f10-2b6d5e4a8c11
+   ```
 
-## Agent names
+*(Tip: You can push to all agents at once with `sessync push claude <id> all`)*
 
-| Name | Aliases |
-|---|---|
-| `claude` | `cc`, `claude-code` |
-| `codex` | `cx`, `openai` |
-| `kiro` | `k`, `kiro-cli` |
-| `antigravity` | `ag`, `antigravity-cli`, `gemini` |
+---
 
-`all` is accepted wherever an agent name is.
+### Option 2: Automatic Background Sync
 
-## Finding a session id
+Keep sessions automatically shared across your tools whenever a session turn finishes.
 
-Use the id the source agent itself shows you:
+1. **Enable auto-push for Claude and Codex:**
+   ```sh
+   sessync auto_push add claude
+   sessync auto_push add codex
+   ```
 
-| Agent | Where to get the id |
-|---|---|
-| Claude Code | the filename in `~/.claude/projects/<project>/<id>.jsonl` |
-| Codex | `codex resume` picker, or the uuid in the rollout filename |
-| Kiro | `kiro-cli chat --list-sessions` |
-| Antigravity | the `/resume` picker inside `agy` |
+2. **Check your configured hooks:**
+   ```sh
+   sessync auto_push list
+   ```
+   Output:
+   ```
+   agent         auto_push  hook location
+   claude        true       ~/.claude/settings.json
+   codex         true       ~/.codex/hooks.json
+   kiro          false      .kiro/hooks/sessync.json
+   antigravity   false      ~/.gemini/config/hooks.json
+   ```
 
-## Commands
+Now, every session completed in Claude Code or Codex is automatically mirrored to the other.
 
-### `sessync push <source_agent> [source_id] <target_agent|all>`
+---
 
-Copies one session into another agent.
+## Cleanup
 
-* `all` as the target means every agent that has `auto_pull` on. Naming a target
-  explicitly always works, regardless of its `auto_pull` setting.
-* Pushing the same session twice **updates the existing mirror in place**,
-  keeping its id and its spot in the agent's resume list. It does not create a
-  duplicate.
-* If the mirror has been continued in its own tool since the last push, the push
-  is refused rather than clobbering your work.
-
-| Flag | What it does |
-|---|---|
-| `--force` | overwrite a mirror that was continued in its own tool |
-| `--from-hook` | read the session id from a Stop hook payload on stdin instead of taking it as an argument |
-| `--quiet` | print nothing and always exit 0, so a failure can't disrupt the agent that ran the hook |
-
-`--from-hook` and `--quiet` exist for the hooks below; you don't need them by hand.
-Hook pushes skip sessions that weren't interactive (`codex exec` runs, subagent
-threads); naming one in a manual `push` still works.
-
-### `sessync auto_push add|remove|list [agent]`
-
-Controls which agents push their finished sessions out automatically, by
-installing a Stop hook in that agent's own config.
+If you ever want to preview or remove the mirror sessions created by Session Sync:
 
 ```sh
-sessync auto_push add claude     # claude pushes every session it finishes
-sessync auto_push list
-sessync auto_push remove all
+# Preview what would be removed
+sessync cleanup
+
+# Delete mirrored sessions created by sessync across all agents
+sessync cleanup --apply
 ```
 
-`list` reads the agents' config files directly, so it always reflects reality:
+---
 
-```
-agent         auto_push  hook location
-claude        true       ~\.claude\settings.json
-codex         false      ~\.codex\hooks.json
-kiro          false      <project>\.kiro\hooks\sessync.json  (this project only)
-antigravity   false      ~\.gemini\config\hooks.json
-```
+## More Info
 
-Two things to know:
-
-* **Kiro's hooks are per project directory.** `auto_push add kiro` only affects
-  the directory you run it in.
-* Edits are surgical — exactly one entry is added or removed, and a
-  `.sessync-bak` copy is written before the first change to an existing file.
-
-The installed hook runs `sessync push <agent> all --from-hook --quiet`.
-
-### `sessync auto_pull add|remove|list [agent]`
-
-Controls which agents *accept* pushed sessions — that is, which ones
-`push <src> all` writes into. All agents accept by default.
-
-```sh
-sessync auto_pull remove kiro    # stop mirroring into kiro
-sessync auto_pull list
-```
-
-This is a setting, stored in `~/.sessync/config.json`.
-
-### Turning on full automatic mirroring
-
-```sh
-sessync auto_push add all
-sessync auto_pull add all
-```
-
-Every agent then mirrors each finished session into all the others. There's no
-feedback loop: a mirror that's already up to date resolves to `unchanged`, so
-nothing propagates further.
-
-### `sessync cleanup [--apply]`
-
-Removes the mirrors sessync made of sessions nobody sat in -- `codex exec` runs
-and subagent threads. Hooks no longer push those, but older versions did, so a
-scripted batch can have left hundreds of copies in every other agent.
-
-```sh
-sessync cleanup            # list what would be removed
-sessync cleanup --apply    # remove it
-```
-
-Only sessions sessync itself wrote (the ones in `lineage.json`) are touched. The
-source sessions are never removed, and a mirror you continued in its own tool
-is kept.
-
-## Resuming a mirror
-
-`push` prints the exact command, but for reference:
-
-```sh
-claude --resume <id>
-codex resume <id>
-kiro-cli --resume-id <id>
-agy --conversation=<id>
-```
-
-Run it from the same directory the original session was in — Claude Code, Codex
-and Kiro all scope their session lists by directory. (Antigravity doesn't, so
-its mirrors show up in `/resume` from anywhere.)
-
-## What carries over
-
-* Your messages and the assistant's replies, verbatim.
-* Tool calls with their arguments and output. Kiro and Antigravity have no tool
-  record to write into, so their mirrors carry a `[used tools: ...]` note
-  instead.
-* Long tool arguments and output are truncated, with a marker saying how much
-  was dropped. A full-fidelity mirror of a real session came to ~250k tokens,
-  more than the target can hold.
-
-What doesn't:
-
-* Reasoning and thinking blocks — they're signed or encrypted and genuinely
-  can't be transferred.
-* Token accounting, file-history checkpoints and UI state.
-* History the source agent already discarded when it compacted. You get the
-  conversation the source actually has, not the one its file still contains.
-
-This is context transfer, not a faithful replay. The target agent will know what
-happened and what was run; it won't reproduce a byte-identical transcript.
-
-## Files sessync writes
-
-| Path | What |
-|---|---|
-| `~/.sessync/config.json` | `auto_pull` settings |
-| `~/.sessync/lineage.json` | which session in tool A corresponds to which in tool B |
-| `~/.sessync/notify.log` | what every push did — start here when a hook seems to have done nothing |
-
-Deleting `lineage.json` is safe: mirrors are re-found by matching conversation
-content.
-
-Beyond those, sessync only writes into the target agent's own session store, and
-never adds an identifier of its own to anyone's session files.
-
-## Troubleshooting
-
-**A hook fired but nothing was mirrored.** Check `~/.sessync/notify.log`. Hooks
-run with `--quiet`, so failures are logged rather than printed.
-
-**"refused: mirror was continued in its own tool".** The target session has
-moved on since the last push. Use `--force` if you want to overwrite it.
-
-**`push` reports `unchanged`.** The mirror is already current. That's a success.
-
-**A ported session doesn't appear in the picker.** Make sure you're in the
-directory the original session ran in.
-
-## How it works
-
-Each agent has an adapter that reads its sessions into one shared format and
-writes that format back out, so adding an agent means writing one adapter.
-[docs/internals.md](docs/internals.md) covers the pipeline, how mirrors are
-recognised without duplicating them, and where each agent keeps its sessions.
+For deep-dive documentation on session formats, storage layouts, and agent internals, see [docs/internals.md](docs/internals.md).
 
 ## Development
 
@@ -262,13 +107,6 @@ cd session-sync
 pip install -e ".[dev]"
 pytest
 ```
-
-The tests run against a throwaway home directory, so they never touch your real
-agent sessions. CI runs them on Linux and Windows.
-
-Bug reports are welcome. The most useful ones say which agent and version, which
-direction you pushed, and include the relevant lines from
-`~/.sessync/notify.log`.
 
 ## License
 

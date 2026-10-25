@@ -348,5 +348,30 @@ def _append_history(sid: str, sess: Session, cwd: str) -> None:
         pass
 
 
+def delete(session_id: str) -> bool:
+    """Remove a session file and any appended entries in history.jsonl."""
+    removed = False
+    try:
+        path = _find(session_id)
+        path.unlink(missing_ok=True)
+        # Clean up empty project directory if no files remain
+        if path.parent.exists() and not any(path.parent.iterdir()):
+            path.parent.rmdir()
+        removed = True
+    except (FileNotFoundError, OSError):
+        pass
+
+    try:
+        if HISTORY.exists():
+            lines = HISTORY.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+            kept = [l for l in lines if f'"{session_id}"' not in l]
+            if len(kept) != len(lines):
+                HISTORY.write_text("".join(kept), encoding="utf-8", newline="\n")
+    except OSError:
+        pass
+
+    return removed
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && claude --resume {session_id}'

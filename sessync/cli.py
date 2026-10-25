@@ -8,6 +8,8 @@
     sessync auto_pull add|remove <agent>      allow/deny incoming sessions
     sessync auto_pull list                    which agents accept them
 
+    sessync cleanup [--all]                   delete sessions created by sessync
+
 `agent` may be `all`. Pushing is idempotent: an existing mirror is updated in
 place rather than duplicated.
 """
@@ -115,6 +117,18 @@ def cmd_auto_pull(args) -> int:
     return 0
 
 
+def cmd_cleanup(args) -> int:
+    results = sync.cleanup(all_sessions=args.all)
+    if not results:
+        print("no created sessions found to clean up")
+        return 0
+    print(f"cleaned up {len(results)} session(s):")
+    for tool, sid, ok in results:
+        status = "deleted" if ok else "not found / already removed"
+        print(f"  - {tool:12} {sid} ({status})")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         prog="sessync", description=__doc__,
@@ -174,6 +188,14 @@ def main(argv=None) -> int:
                         help="which agent, or 'all' (default: all). "
                              "ignored by 'list'")
         sp.set_defaults(func=fn)
+
+    cp = sub.add_parser(
+        "cleanup", help="delete sessions created by sessync",
+        description="Delete session mirrors created by sessync across target agents. "
+                    "Leaves original source sessions untouched unless --all is specified.")
+    cp.add_argument("--all", action="store_true",
+                    help="also delete original source sessions tracked in lineage")
+    cp.set_defaults(func=cmd_cleanup)
 
     args = p.parse_args(argv)
     try:

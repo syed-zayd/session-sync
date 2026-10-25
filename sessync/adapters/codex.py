@@ -517,5 +517,40 @@ def _index_thread(sid: str, sess: Session, cwd: str, path: Path,
         pass
 
 
+def delete(session_id: str) -> bool:
+    """Remove a rollout file and associated rows in state_5.sqlite and session_index.jsonl."""
+    removed = False
+    try:
+        path = _find(session_id)
+        path.unlink(missing_ok=True)
+        removed = True
+    except (FileNotFoundError, OSError):
+        pass
+
+    if STATE_DB.exists():
+        try:
+            con = sqlite3.connect(STATE_DB, timeout=10)
+            con.execute("PRAGMA busy_timeout = 10000")
+            cur = con.execute("DELETE FROM threads WHERE id=?", (session_id,))
+            con.commit()
+            con.close()
+            if cur.rowcount > 0:
+                removed = True
+        except sqlite3.Error:
+            pass
+
+    try:
+        if SESSION_INDEX.exists():
+            lines = SESSION_INDEX.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+            kept = [l for l in lines if f'"{session_id}"' not in l]
+            if len(kept) != len(lines):
+                SESSION_INDEX.write_text("".join(kept), encoding="utf-8", newline="\n")
+                removed = True
+    except OSError:
+        pass
+
+    return removed
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && codex resume {session_id}'

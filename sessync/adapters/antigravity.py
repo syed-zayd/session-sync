@@ -424,5 +424,36 @@ def _append_history(cid: str, sess: Session, cwd: str, tag: str) -> None:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+def delete(session_id: str) -> bool:
+    """Remove a session db, brain directory, and prompt entries from history.jsonl."""
+    removed = False
+    db = CONV / f"{session_id}.db"
+    for p in (db, db.with_suffix(".db-wal"), db.with_suffix(".db-shm")):
+        if p.exists():
+            try:
+                p.unlink(missing_ok=True)
+                removed = True
+            except OSError:
+                pass
+
+    brain_dir = BRAIN / session_id
+    if brain_dir.exists():
+        import shutil
+        shutil.rmtree(brain_dir, ignore_errors=True)
+        removed = True
+
+    hist = ROOT / "history.jsonl"
+    try:
+        if hist.exists():
+            lines = hist.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+            kept = [l for l in lines if f'"{session_id}"' not in l]
+            if len(kept) != len(lines):
+                hist.write_text("".join(kept), encoding="utf-8", newline="\n")
+    except OSError:
+        pass
+
+    return removed
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && agy --conversation={session_id}'

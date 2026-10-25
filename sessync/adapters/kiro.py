@@ -350,5 +350,19 @@ def write(sess: Session, session_id: str | None = None,
     return sid
 
 
+def delete(session_id: str) -> bool:
+    """Remove a session's jsonl, json sidecar, history, and lock files."""
+    removed = False
+    for suf in (".jsonl", ".json", ".history", ".lock"):
+        p = ROOT / f"{session_id}{suf}"
+        if p.exists():
+            try:
+                p.unlink(missing_ok=True)
+                removed = True
+            except OSError:
+                pass
+    return removed
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && kiro-cli --resume-id {session_id}'

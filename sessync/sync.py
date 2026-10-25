@@ -175,3 +175,32 @@ def fanout(src_tool: str, src_id: str, targets: list[str] | None = None, *,
                 results.append(PortResult(dst, FAILED, None, str(exc)))
     reg.save()
     return results
+
+
+def cleanup(all_sessions: bool = False) -> list[tuple[str, str, bool]]:
+    """Clean up sessions created by sessync.
+
+    By default (all_sessions=False), cleans up all mirror sessions that were created
+    by sessync across target agents, preserving original source sessions.
+    If all_sessions=True, cleans up all sessions recorded in lineage.json (mirrors
+    and original sources).
+
+    Returns a list of (tool, session_id, success).
+    """
+    reg = Registry()
+    results = []
+    with runtime.Lock():
+        for ln in list(reg.lineages):
+            for tool, member in list(ln.members.items()):
+                # If not all_sessions and origin is known, preserve the source session.
+                if not all_sessions and ln.origin and tool == ln.origin:
+                    continue
+                sid = member.session_id
+                if tool in ADAPTERS:
+                    ok = ADAPTERS[tool].delete(sid)
+                    results.append((tool, sid, ok))
+                    reg.forget(tool, sid)
+                else:
+                    results.append((tool, sid, False))
+        reg.save()
+    return results

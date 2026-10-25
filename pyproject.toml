@@ -7,6 +7,7 @@ name = "sessync"
 version = "0.2.0"
 description = "Move coding-agent sessions between Claude Code, Codex, Kiro and Antigravity"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = []
 authors = [{ name = "Zayd Syed" }]
@@ -15,6 +16,7 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development",

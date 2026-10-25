@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
 **Move a coding-agent session from one CLI to another and keep going where you
@@ -268,3 +269,7 @@ agent sessions. CI runs them on Linux and Windows.
 Bug reports are welcome. The most useful ones say which agent and version, which
 direction you pushed, and include the relevant lines from
 `~/.sessync/notify.log`.
+
+## License
+
+[MIT](LICENSE)

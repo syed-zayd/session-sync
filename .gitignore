@@ -1,0 +1,18 @@
+# Local conversations, private session snapshots, and machine configuration
+/baselines/
+/backups/
+/testsessions/
+/.kiro/
+AGENTS.md
+CLAUDE.md
+tests/test_kiro_classic.py
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/

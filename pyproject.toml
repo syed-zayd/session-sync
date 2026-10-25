@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sessync"
+version = "0.2.0"
+description = "Port and mirror coding-agent sessions between CLIs"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+# Hooks run in the tool's own working directory, so mirroring has to be
+# reachable as a plain command rather than `python -m` from the source tree.
+sessync = "sessync.cli:main"
+
+[tool.setuptools]
+packages = ["sessync", "sessync.adapters"]

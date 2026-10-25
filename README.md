@@ -79,6 +79,18 @@ Keep sessions automatically shared across your tools whenever a session turn fin
 
 Now, every session completed in Claude Code or Codex is automatically mirrored to the other.
 
+#### Controlling who accepts incoming sessions (`auto_pull`)
+
+When pushing to `all` (including the automatic background hooks above), sessions are only mirrored to agents with `auto_pull` enabled. All agents accept incoming sessions by default. You can inspect or toggle this at any time:
+
+```sh
+sessync auto_pull list            # see which agents accept incoming mirrors
+sessync auto_pull remove kiro     # stop mirroring sessions into kiro
+sessync auto_pull add kiro        # start accepting mirrors again
+```
+
+*(Note: Explicitly targeting an agent with `sessync push <src> <id> <target>` always works directly, even if that target's `auto_pull` is turned off).*
+
 ---
 
 ## Cleanup
@@ -95,7 +107,17 @@ sessync cleanup --apply
 
 ---
 
-## More Info
+## Help & Commands
+
+For CLI usage, options, and full command descriptions:
+
+```sh
+sessync --help
+sessync push --help
+sessync auto_push --help
+sessync auto_pull --help
+sessync cleanup --help
+```
 
 For deep-dive documentation on session formats, storage layouts, and agent internals, see [docs/internals.md](docs/internals.md).
 

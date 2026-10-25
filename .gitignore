@@ -5,7 +5,6 @@
 /.kiro/
 AGENTS.md
 CLAUDE.md
-tests/test_kiro_classic.py
 
 # Python build artifacts
 __pycache__/

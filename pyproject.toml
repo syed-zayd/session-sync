@@ -6,8 +6,24 @@ build-backend = "setuptools.build_meta"
 name = "sessync"
 version = "0.2.0"
 description = "Port and mirror coding-agent sessions between CLIs"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Zayd Syed" }]
 requires-python = ">=3.10"
 dependencies = []
+keywords = ["claude-code", "codex", "kiro", "antigravity", "cli", "sessions"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Topic :: Software Development",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/syed-zayd/session-sync"
 
 [project.scripts]
 # Hooks run in the tool's own working directory, so mirroring has to be
@@ -16,3 +32,6 @@ sessync = "sessync.cli:main"
 
 [tool.setuptools]
 packages = ["sessync", "sessync.adapters"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

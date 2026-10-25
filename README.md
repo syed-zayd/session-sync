@@ -1,18 +1,34 @@
 # Session Sync
 
+[![tests](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml)
+
 Move a coding-agent session from one CLI into another, so you can pick up where
 you left off without rebuilding context.
 
 Supports **Claude Code**, **Codex CLI**, **Kiro CLI** and **Antigravity CLI**, in
 all 12 directions. Your existing sessions are never modified.
 
+None of these tools document their session formats, and none offer an import
+command. Session Sync writes each one's native on-disk format directly, so a
+ported session shows up in that tool's own resume picker like any other. The
+formats were reverse-engineered by diffing real sessions — see
+[docs/INTERNALS.md](docs/INTERNALS.md) for what that took.
+
 ## Install
 
+Requires Python 3.10+. No dependencies.
+
 ```sh
-pip install -e .
+pip install git+https://github.com/syed-zayd/session-sync
 ```
 
+or, from a clone, `pip install -e .`
+
 This puts a `sessync` command on your PATH.
+
+> Developed and verified against the real CLIs on Windows. The test suite also
+> runs on Linux and macOS, but the agents' storage layouts there have not been
+> checked against live installs.
 
 ## Quick start
 
@@ -198,5 +214,26 @@ directory the original session ran in.
 
 ## Internals
 
-See [CLAUDE.md](CLAUDE.md) for session formats, storage layout, and the
-per-agent details behind all of this.
+See [docs/INTERNALS.md](docs/INTERNALS.md) for session formats, storage layout,
+and the per-agent details behind all of this.
+
+## Development
+
+```sh
+pip install -e ".[dev]"
+pytest
+```
+
+The tests never touch your real agent history: they redirect `HOME`,
+`USERPROFILE` and `LOCALAPPDATA` to a temporary directory before sessync is
+imported, and refuse to run if any session store resolves outside it.
+
+## Acknowledgements
+
+[ai-session-bridge](https://github.com/bakhtiersizhaev/ai-session-bridge) was
+useful prior art, in particular for spotting that Codex needs
+`session_index.jsonl` to append to a resumed thread.
+
+## License
+
+[MIT](LICENSE)

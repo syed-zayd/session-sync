@@ -27,6 +27,7 @@ register with, unlike Codex -- and does not filter by cwd.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import urllib.parse
@@ -160,7 +161,9 @@ def _workspace_of(cid: str) -> str:
             uri = proto.first_str(proto.parse(ws[0]), 1) or ""
     if uri.startswith("file:///"):
         p = urllib.parse.unquote(uri[len("file:///"):])
-        return p.replace("/", "\\")
+        # `file:///C:/x` on Windows, `file:///home/x` elsewhere -- the inverse
+        # of _uri(), which strips the leading slash of a POSIX path.
+        return p.replace("/", "\\") if os.name == "nt" else "/" + p
     return _workspace_from_history(cid)
 
 

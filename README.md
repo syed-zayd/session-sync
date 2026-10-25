@@ -1,18 +1,52 @@
-# Session Sync
+# sessync
 
-Move a coding-agent session from one CLI into another, so you can pick up where
-you left off without rebuilding context.
+[![tests](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/syed-zayd/session-sync/actions/workflows/tests.yml)
+![python](https://img.shields.io/badge/python-3.10%2B-blue)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
-Supports **Claude Code**, **Codex CLI**, **Kiro CLI** and **Antigravity CLI**, in
-all 12 directions. Your existing sessions are never modified.
+**Move a coding-agent session from one CLI to another and keep going where you
+left off.**
+
+Hit a rate limit in Claude Code halfway through a task? Push the session into
+Codex and carry on, with the whole conversation and every tool call it made. Or
+turn on automatic mirroring and every session you finish shows up, ready to
+resume, in all your other agents.
+
+|  | Claude Code | Codex CLI | Kiro CLI | Antigravity CLI |
+|---|:---:|:---:|:---:|:---:|
+| Read sessions | ✓ | ✓ | ✓ | ✓ |
+| Write resumable sessions | ✓ | ✓ | ✓ | ✓ |
+| Tool calls carried natively | ✓ | ✓ | as a note | as a note |
+| Automatic push (Stop hook) | ✓ | ✓ | ✓ | ✓ |
+
+All 12 directions work. It's pure Python with no dependencies.
+
+* **No duplicates.** Pushing the same conversation again updates its mirror in
+  place, even after you've gone back and forth between tools.
+* **Your work is safe.** sessync refuses to overwrite a session that holds
+  turns the source doesn't, so nothing you typed in another tool is lost
+  without `--force`.
+* **Shows up where you'd look.** Mirrors appear in each agent's own resume
+  picker, labelled with where the conversation started.
+
+> [!NOTE]
+> sessync is an independent project, not affiliated with Anthropic, OpenAI,
+> Amazon or Google. None of these agents document their session formats, so
+> sessync works from what they write to disk, and an agent update can break an
+> adapter. If a push stops working after you update an agent, please
+> [open an issue](https://github.com/syed-zayd/session-sync/issues).
 
 ## Install
 
+Requires Python 3.10+.
+
 ```sh
-pip install -e .
+pip install git+https://github.com/syed-zayd/session-sync
 ```
 
-This puts a `sessync` command on your PATH.
+This puts a `sessync` command on your PATH. To hack on it instead, see
+[Development](#development).
 
 ## Quick start
 
@@ -213,7 +247,29 @@ moved on since the last push. Use `--force` if you want to overwrite it.
 **A ported session doesn't appear in the picker.** Make sure you're in the
 directory the original session ran in.
 
-## Internals
+## How it works
 
-See [CLAUDE.md](CLAUDE.md) for session formats, storage layout, and the
-per-agent details behind all of this.
+Each agent has an adapter that reads its sessions into one shared format and
+writes that format back out, so adding an agent means writing one adapter.
+[docs/internals.md](docs/internals.md) covers the pipeline, how mirrors are
+recognised without duplicating them, and where each agent keeps its sessions.
+
+## Development
+
+```sh
+git clone https://github.com/syed-zayd/session-sync
+cd session-sync
+pip install -e ".[dev]"
+pytest
+```
+
+The tests run against a throwaway home directory, so they never touch your real
+agent sessions. CI runs them on Linux and Windows.
+
+Bug reports are welcome. The most useful ones say which agent and version, which
+direction you pushed, and include the relevant lines from
+`~/.sessync/notify.log`.
+
+## License
+
+[MIT](LICENSE)

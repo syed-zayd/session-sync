@@ -1,2 +1,2 @@
-"""Session Sync -- port a coding-agent session between CLIs."""
-__version__ = "0.1.0"
+"""sessync -- move coding-agent sessions between CLIs."""
+__version__ = "0.2.0"

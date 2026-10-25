@@ -348,5 +348,26 @@ def _append_history(sid: str, sess: Session, cwd: str) -> None:
         pass
 
 
+def _drop_rows(path: Path, key: str, value: str) -> None:
+    """Remove every JSONL row whose `key` is `value`, leaving the rest as is."""
+    if not path.exists():
+        return
+    kept = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines(True):
+        try:
+            if json.loads(line).get(key) == value:
+                continue
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        kept.append(line)
+    path.write_text("".join(kept), encoding="utf-8", newline="\n")
+
+
+def delete(session_id: str) -> None:
+    """Remove a session and its up-arrow history rows."""
+    _find(session_id).unlink()
+    _drop_rows(HISTORY, "sessionId", session_id)
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && claude --resume {session_id}'

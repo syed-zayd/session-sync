@@ -242,3 +242,50 @@ def fanout(src_tool: str, src_id: str, targets: list[str] | None = None, *,
                 results.append(PortResult(dst, FAILED, None, str(exc)))
     reg.save()
     return results
+
+
+# ----------------------------------------------------------------- cleanup
+
+@dataclass
+class Mirror:
+    tool: str
+    session_id: str
+    origin: str
+    origin_id: str
+    kept: str = ""          # why it stays, if it does
+
+
+def scripted_mirrors(reg: Registry) -> list[Mirror]:
+    """Mirrors sessync made of sessions nobody sat in -- `codex exec` runs,
+    subagent threads. Older versions pushed those from the hook; nothing does
+    now, but the copies are still in every other agent's picker.
+
+    Only registry members are candidates, so nothing sessync did not write is
+    ever touched, and the source session itself never is. A mirror that was
+    continued in its own tool is reported but kept.
+    """
+    found = []
+    for ln in reg.lineages:
+        src = ln.members.get(ln.origin)
+        check = getattr(ADAPTERS.get(ln.origin), "interactive", None)
+        if not src or not check or not ADAPTERS[ln.origin].exists(src.session_id):
+            continue
+        if check(src.session_id):
+            continue
+        for tool, m in ln.members.items():
+            if tool == ln.origin or not ADAPTERS[tool].exists(m.session_id):
+                continue
+            mirror = Mirror(tool, m.session_id, ln.origin, src.session_id)
+            try:
+                current = ADAPTERS[tool].read(m.session_id).content_hash()
+            except Exception:                          # noqa: BLE001
+                current = ""
+            if m.hash and current != m.hash:
+                mirror.kept = "continued in its own tool"
+            found.append(mirror)
+    return found
+
+
+def remove(reg: Registry, mirror: Mirror) -> None:
+    ADAPTERS[mirror.tool].delete(mirror.session_id)
+    reg.forget(mirror.tool, mirror.session_id)

@@ -8,17 +8,21 @@
     sessync auto_pull add|remove <agent>      allow/deny incoming sessions
     sessync auto_pull list                    which agents accept them
 
+    sessync cleanup [--apply]                 remove mirrors of scripted runs
+
 `agent` may be `all`. Pushing is idempotent: an existing mirror is updated in
 place rather than duplicated.
 """
 from __future__ import annotations
 
 import argparse
+import collections
 import sys
 
 from . import hooks, runtime, sync
 from .adapters import ADAPTERS, resolve
 from .config import Config
+from .registry import Registry
 
 _MARK = {"created": "+", "updated": "~", "unchanged": "=",
          "skipped": "!", "failed": "x"}
@@ -87,6 +91,37 @@ def cmd_push(args) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         return 0
+
+
+def cmd_cleanup(args) -> int:
+    with runtime.Lock():
+        reg = Registry()
+        found = sync.scripted_mirrors(reg)
+        doomed = [m for m in found if not m.kept]
+        for m in found:
+            mark = "keep" if m.kept else ("-" if args.apply else "would remove")
+            print(f"  {mark:13} {m.tool:12} {m.session_id}"
+                  f"  (from {m.origin}/{m.origin_id})"
+                  + (f"  {m.kept}" if m.kept else ""))
+        counts = collections.Counter(m.tool for m in doomed)
+        summary = ", ".join(f"{n} {t}" for t, n in sorted(counts.items())) or "nothing"
+        if not args.apply:
+            print(f"\n{len(doomed)} mirrors of scripted sessions ({summary}).")
+            if doomed:
+                print("re-run with --apply to delete them.")
+            return 0
+        failed = 0
+        for m in doomed:
+            try:
+                sync.remove(reg, m)
+            except Exception as exc:                   # noqa: BLE001
+                failed += 1
+                print(f"  x {m.tool} {m.session_id}: {exc}", file=sys.stderr)
+            reg.save()        # per mirror, so an interruption loses nothing
+        runtime.log(f"cleanup: removed {len(doomed) - failed} ({summary})")
+        print(f"\nremoved {len(doomed) - failed} mirrors ({summary})"
+              + (f", {failed} failed" if failed else "") + ".")
+        return 1 if failed else 0
 
 
 def _agents(name: str) -> list[str]:
@@ -181,6 +216,17 @@ def main(argv=None) -> int:
                         help="which agent, or 'all' (default: all). "
                              "ignored by 'list'")
         sp.set_defaults(func=fn)
+
+    cp = sub.add_parser(
+        "cleanup", help="remove mirrors of scripted or subagent sessions",
+        description="List the mirrors sessync made of sessions nobody sat in "
+                    "(`codex exec` runs, subagent threads) and, with --apply, "
+                    "delete them. Only sessions sessync wrote are touched; "
+                    "the source sessions and any mirror continued in its own "
+                    "tool are kept.")
+    cp.add_argument("--apply", action="store_true",
+                    help="actually delete them (default: only list)")
+    cp.set_defaults(func=cmd_cleanup)
 
     args = p.parse_args(argv)
     try:

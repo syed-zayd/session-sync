@@ -107,7 +107,12 @@ class Lock:
         self.held = True
         _process_mutex.acquire()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        for _ in range(60):
+        # Wait as long as it takes for a holder to go stale, and never proceed
+        # without the lock: two unlocked pushes both miss each other's mirror
+        # and both create one. Being killed while waiting costs nothing -- the
+        # next push catches up.
+        deadline = time.time() + LOCK_STALE_SECONDS + 5
+        while time.time() < deadline:
             try:
                 self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(self.fd, str(os.getpid()).encode())
@@ -120,8 +125,10 @@ class Lock:
                 except OSError:
                     pass
                 time.sleep(0.25)
-        log("lock: timed out waiting; proceeding without it")
-        return self
+        _local.depth -= 1
+        self.held = False
+        _process_mutex.release()
+        raise TimeoutError(f"could not acquire {self.path}")
 
     def __exit__(self, *exc):
         _local.depth = max(getattr(_local, "depth", 1) - 1, 0)
@@ -132,7 +139,10 @@ class Lock:
                 os.close(self.fd)
             except OSError:
                 pass
-        self.path.unlink(missing_ok=True)
+            # Only the holder removes the file; anyone else would be deleting
+            # a lock another process still holds.
+            self.path.unlink(missing_ok=True)
+            self.fd = None
         self.held = False
         _process_mutex.release()
         return False

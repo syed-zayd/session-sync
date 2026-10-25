@@ -112,6 +112,23 @@ class Registry:
         self.lineages.append(ln)
         return ln
 
+    def adopt(self, ln: Lineage, tool: str, session_id: str) -> Lineage:
+        """Join `ln` to the lineage that already owns tool/session_id, if any.
+
+        A source the registry did not know gets a fresh lineage, which would
+        make it the origin and retag every recovered mirror "[From <source>]".
+        If the copy we just found belongs to a known lineage, that one is the
+        truth: fold the source into it and keep its origin.
+        """
+        other = self.find(tool, session_id)
+        if other is None or other is ln:
+            return ln
+        # The session being pushed is authoritative for its own tool.
+        other.members.update(ln.members)
+        if ln in self.lineages:
+            self.lineages.remove(ln)
+        return other
+
     def record(self, ln: Lineage, tool: str, session_id: str, digest: str) -> None:
         ln.members[tool] = Member(session_id=session_id, hash=digest,
                                   updated=now().isoformat())

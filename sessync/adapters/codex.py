@@ -154,6 +154,26 @@ def _find(session_id: str) -> Path:
     raise FileNotFoundError(f"codex session {session_id} not found")
 
 
+# Sessions a person sits in. `exec` is `codex exec` -- scripted, often fired in
+# bulk -- and subagent threads carry a {"subagent": ...} object. Neither is a
+# conversation anyone resumes, and mirroring a batch of 250 exec runs filled
+# every other agent's picker with near-identical sessions.
+_INTERACTIVE_SOURCES = ("cli", "vscode")
+
+
+def interactive(session_id: str) -> bool:
+    """True unless session_meta marks this as a scripted or subagent run."""
+    try:
+        with _find(session_id).open(encoding="utf-8") as fh:
+            meta = json.loads(fh.readline())
+    except (OSError, json.JSONDecodeError):
+        return True
+    if meta.get("type") != "session_meta":
+        return True
+    source = (meta.get("payload") or {}).get("source", "cli")
+    return source in _INTERACTIVE_SOURCES
+
+
 def _messages_from(items: list, ts) -> list[Message]:
     """Turn a list of response-item dicts into canonical messages."""
     out: list[Message] = []

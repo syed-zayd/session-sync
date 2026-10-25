@@ -2,7 +2,7 @@
 
 Runs against a throwaway HOME: adapters resolve their stores from it at import.
 """
-import os, shutil, sys, tempfile
+import json, os, shutil, sys, tempfile
 from datetime import datetime, timedelta, timezone
 
 HOME = tempfile.mkdtemp(prefix="sessync-dup-home-")
@@ -10,7 +10,7 @@ os.environ["HOME"] = os.environ["USERPROFILE"] = HOME
 os.environ["SESSYNC_HOME"] = os.path.join(HOME, ".sessync")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sessync import registry, sync                           # noqa: E402
+from sessync import cli, registry, sync                           # noqa: E402
 from sessync.adapters import ADAPTERS, claude_code, codex    # noqa: E402
 from sessync.canonical import Message, Session               # noqa: E402
 
@@ -94,6 +94,23 @@ try:
     r = sync.port("claude", src, "codex")
     check("diverged copy is skipped", r.action, "skipped")
     check("  and not duplicated", r.session_id, first)
+
+    print("\n--- scripted codex runs are not mirrored by the hook ---")
+    before = {t: count(t) for t in ADAPTERS}
+    for source in ("exec", {"subagent": {"thread_spawn": {"depth": 1}}}):
+        sid = codex.write(convo(msgs=[Message("user", f"batch job {source!r}", N),
+                                      Message("assistant", "done", N)]))
+        path = codex._find(sid)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        meta = json.loads(lines[0])
+        meta["payload"]["source"] = source
+        path.write_text("\n".join([json.dumps(meta)] + lines[1:]) + "\n",
+                        encoding="utf-8")
+        cli.main(["push", "codex", sid, "all", "--from-hook", "--quiet"])
+    check("nothing mirrored", {t: count(t) for t in ADAPTERS if t != "codex"},
+          {t: before[t] for t in ADAPTERS if t != "codex"})
+    r = sync.port("codex", sid, "claude")
+    check("an explicit push still works", r.action, "created")
 finally:
     shutil.rmtree(HOME, ignore_errors=True)
 

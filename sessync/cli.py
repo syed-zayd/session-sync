@@ -63,6 +63,13 @@ def cmd_push(args) -> int:
                       file=sys.stderr)
             return 0 if quiet else 2
 
+        # Hooks fire for every session, including scripted ones. Mirroring
+        # those is never what anyone wants; an explicit push still works.
+        check = getattr(src_mod, "interactive", None)
+        if args.from_hook and check and not check(sid):
+            runtime.log(f"{src}/{sid}: not interactive, skipped")
+            return 0
+
         sess = src_mod.read(sid)
         with runtime.Lock():
             results = sync.fanout(src, sid, targets, force=args.force)

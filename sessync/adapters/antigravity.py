@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sqlite3
 import urllib.parse
 import uuid
@@ -419,6 +420,33 @@ def _append_history(cid: str, sess: Session, cwd: str, tag: str) -> None:
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for r in rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def _drop_rows(path: Path, key: str, value: str) -> None:
+    """Remove every JSONL row whose `key` is `value`, leaving the rest as is."""
+    if not path.exists():
+        return
+    kept = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines(True):
+        try:
+            if json.loads(line).get(key) == value:
+                continue
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        kept.append(line)
+    path.write_text("".join(kept), encoding="utf-8", newline="\n")
+
+
+def delete(session_id: str) -> None:
+    """Remove a conversation: its database, its brain dir, its history rows."""
+    db = CONV / f"{session_id}.db"
+    if not db.exists():
+        raise FileNotFoundError(f"antigravity session {session_id} not found")
+    # WAL side files would resurrect the rows if left behind.
+    for suf in ("", "-wal", "-shm"):
+        Path(f"{db}{suf}").unlink(missing_ok=True)
+    shutil.rmtree(BRAIN / session_id, ignore_errors=True)
+    _drop_rows(ROOT / "history.jsonl", "conversationId", session_id)
 
 
 def resume_hint(session_id: str, cwd: str) -> str:

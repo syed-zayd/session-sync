@@ -79,6 +79,8 @@ Copies one session into another agent.
 | `--quiet` | print nothing and always exit 0, so a failure can't disrupt the agent that ran the hook |
 
 `--from-hook` and `--quiet` exist for the hooks below; you don't need them by hand.
+Hook pushes skip sessions that weren't interactive (`codex exec` runs, subagent
+threads); naming one in a manual `push` still works.
 
 ### `sessync auto_push add|remove|list [agent]`
 
@@ -132,6 +134,21 @@ sessync auto_pull add all
 Every agent then mirrors each finished session into all the others. There's no
 feedback loop: a mirror that's already up to date resolves to `unchanged`, so
 nothing propagates further.
+
+### `sessync cleanup [--apply]`
+
+Removes the mirrors sessync made of sessions nobody sat in -- `codex exec` runs
+and subagent threads. Hooks no longer push those, but older versions did, so a
+scripted batch can have left hundreds of copies in every other agent.
+
+```sh
+sessync cleanup            # list what would be removed
+sessync cleanup --apply    # remove it
+```
+
+Only sessions sessync itself wrote (the ones in `lineage.json`) are touched. The
+source sessions are never removed, and a mirror you continued in its own tool
+is kept.
 
 ## Resuming a mirror
 

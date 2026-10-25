@@ -350,5 +350,13 @@ def write(sess: Session, session_id: str | None = None,
     return sid
 
 
+def delete(session_id: str) -> None:
+    """Remove a session's files. The classic SQLite store is never touched."""
+    if not (ROOT / f"{session_id}.jsonl").exists():
+        raise FileNotFoundError(f"kiro session {session_id} not found")
+    for suf in (".jsonl", ".json", ".history", ".lock"):
+        (ROOT / f"{session_id}{suf}").unlink(missing_ok=True)
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && kiro-cli --resume-id {session_id}'

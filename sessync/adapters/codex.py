@@ -537,5 +537,34 @@ def _index_thread(sid: str, sess: Session, cwd: str, path: Path,
         pass
 
 
+def _drop_rows(path: Path, key: str, value: str) -> None:
+    """Remove every JSONL row whose `key` is `value`, leaving the rest as is."""
+    if not path.exists():
+        return
+    kept = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines(True):
+        try:
+            if json.loads(line).get(key) == value:
+                continue
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        kept.append(line)
+    path.write_text("".join(kept), encoding="utf-8", newline="\n")
+
+
+def delete(session_id: str) -> None:
+    """Remove a rollout and its rows in both indexes."""
+    _find(session_id).unlink()
+    _drop_rows(SESSION_INDEX, "id", session_id)
+    if STATE_DB.exists():
+        try:
+            con = sqlite3.connect(STATE_DB, timeout=10)
+            con.execute("DELETE FROM threads WHERE id = ?", (session_id,))
+            con.commit()
+            con.close()
+        except sqlite3.Error:
+            pass
+
+
 def resume_hint(session_id: str, cwd: str) -> str:
     return f'cd "{cwd}" && codex resume {session_id}'

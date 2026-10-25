@@ -19,7 +19,7 @@ import argparse
 import collections
 import sys
 
-from . import hooks, runtime, sync
+from . import __version__, hooks, runtime, sync
 from .adapters import ADAPTERS, resolve
 from .config import Config
 from .registry import Registry
@@ -161,6 +161,8 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         prog="sessync", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--version", action="version",
+                   version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     agents = ", ".join(ADAPTERS)

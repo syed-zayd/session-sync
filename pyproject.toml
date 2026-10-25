@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sessync"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Move coding-agent sessions between Claude Code, Codex, Kiro and Antigravity"
 readme = "README.md"
 license = { text = "MIT" }
@@ -36,6 +36,9 @@ sessync = "sessync.cli:main"
 
 [tool.setuptools]
 packages = ["sessync", "sessync.adapters"]
+
+[tool.setuptools.dynamic]
+version = { attr = "sessync.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -41,7 +41,11 @@ from ..canonical import (TOOL_LABELS, Message, Session, SessionRef, ToolCall,
                          flatten_for_text, is_provenance_header)
 
 NAME = "antigravity"
-ROOT = Path.home() / ".gemini" / "antigravity-cli"
+# Prefer the Antigravity desktop app directory when it exists so synced
+# sessions appear in the GUI sidebar and are indexed for search.
+_APP_ROOT = Path.home() / ".gemini" / "antigravity"
+_CLI_ROOT = Path.home() / ".gemini" / "antigravity-cli"
+ROOT = _APP_ROOT if _APP_ROOT.exists() else _CLI_ROOT
 CONV = ROOT / "conversations"
 BRAIN = ROOT / "brain"
 SUMMARIES = ROOT / "conversation_summaries.db"
@@ -63,7 +67,15 @@ def _strip_wrappers(text: str) -> str:
 
 
 def _logs_dir(cid: str) -> Path:
-    return BRAIN / cid / ".system_generated" / "logs"
+    # Check current ROOT first, then fall back to CLI or APP root if present
+    primary = BRAIN / cid / ".system_generated" / "logs"
+    if (primary / "transcript_full.jsonl").exists() or (primary / "transcript.jsonl").exists():
+        return primary
+    for other in (_APP_ROOT, _CLI_ROOT):
+        cand = other / "brain" / cid / ".system_generated" / "logs"
+        if (cand / "transcript_full.jsonl").exists() or (cand / "transcript.jsonl").exists():
+            return cand
+    return primary
 
 
 def _parse_ts(raw) -> datetime:
@@ -293,7 +305,9 @@ def _checkpoint_text(title: str, prompts: list[str], log_path: Path) -> str:
 
 
 def exists(session_id: str) -> bool:
-    return (CONV / f"{session_id}.db").exists()
+    if (CONV / f"{session_id}.db").exists():
+        return True
+    return (_CLI_ROOT / "conversations" / f"{session_id}.db").exists() or (_APP_ROOT / "conversations" / f"{session_id}.db").exists()
 
 
 def write(sess: Session, session_id: str | None = None,
@@ -392,8 +406,100 @@ def write(sess: Session, session_id: str | None = None,
         d.mkdir(parents=True, exist_ok=True)
         (d / "00000000.jsonl").write_text(body_txt, encoding="utf-8", newline="\n")
 
+    # If we are writing to the desktop app (or both), record the summary and
+    # FTS entry so the conversation shows up in the app UI sidebar immediately.
+    _index_in_app(cid, title, prompts, sess, cwd)
+
     _append_history(cid, sess, cwd, tag)
     return cid
+
+
+def _index_in_app(cid: str, title: str, prompts: list[str], sess: Session, cwd: str) -> None:
+    """Register or update the conversation in Antigravity Desktop App's index."""
+    summaries_db = _APP_ROOT / "conversation_summaries.db"
+    if not summaries_db.parent.exists():
+        return
+    try:
+        con = sqlite3.connect(summaries_db, timeout=30)
+        # Check if conversation_summaries table exists
+        has_table = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversation_summaries'"
+        ).fetchone()
+        if not has_table:
+            con.close()
+            return
+
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f+00:00")
+        now_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
+        step_count = len(sess.messages)
+
+        # Match workspace URI format if present in app DB
+        ws_uri = ""
+        project_id = "outside-of-project"
+        if cwd:
+            # Check existing workspace URIs to reuse matching project_id
+            for r in con.execute("SELECT project_id, workspace_uris FROM conversation_summaries WHERE workspace_uris != ''"):
+                if r[1] and cwd.lower() in r[1].lower():
+                    project_id = r[0]
+                    ws_uri = r[1]
+                    break
+
+        con.execute('''
+            INSERT OR REPLACE INTO conversation_summaries (
+                conversation_id, title, preview, step_count, last_modified_time,
+                workspace_uris, status, source, project_id, agent_name,
+                parent_conversation_id, nesting_depth, battle_id, winning_conversation_id,
+                not_fully_idle, killed, last_user_input_time, last_user_input_step_index,
+                app_data_dir, raw_summary, group_id
+            ) VALUES (
+                ?, ?, ?, ?, ?,
+                ?, 'CASCADE_RUN_STATUS_IDLE', '', ?, '',
+                '', 0, '', '',
+                0, 0, ?, 0,
+                'antigravity', NULL, ''
+            )
+        ''', (cid, title, title, step_count, now_iso, ws_uri, project_id, now_iso))
+
+        # Check if conversations_fts virtual table exists
+        has_fts = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+        ).fetchone()
+        if has_fts:
+            con.execute("DELETE FROM conversations_fts WHERE conversation_id = ?", (cid,))
+            # chunk -1 (header chunk required for UI listing)
+            con.execute('''
+                INSERT INTO conversations_fts (
+                    conversation_id, chunk_index, chunk_first_step, chunk_last_step,
+                    last_modified_time, step_count, last_step_created_at, archived,
+                    user_step_byte_offsets, agent_step_byte_offsets,
+                    title, workspace, project, user_body, agent_body
+                ) VALUES (
+                    ?, -1, 0, 0,
+                    ?, ?, ?, 0,
+                    '', '',
+                    ?, '', '', '', ''
+                )
+            ''', (cid, now_ns, step_count, now_ns, title))
+            # chunk 0 (content chunk)
+            user_body = "\n".join(prompts) + "\n" if prompts else ""
+            con.execute('''
+                INSERT INTO conversations_fts (
+                    conversation_id, chunk_index, chunk_first_step, chunk_last_step,
+                    last_modified_time, step_count, last_step_created_at, archived,
+                    user_step_byte_offsets, agent_step_byte_offsets,
+                    title, workspace, project, user_body, agent_body
+                ) VALUES (
+                    ?, 0, 0, ?,
+                    0, 0, 0, 0,
+                    '', '',
+                    '', '', '', ?, ''
+                )
+            ''', (cid, max(0, step_count - 1), user_body))
+
+        con.commit()
+        con.close()
+    except Exception:
+        pass
 
 
 def _append_history(cid: str, sess: Session, cwd: str, tag: str) -> None:
